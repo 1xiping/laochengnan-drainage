@@ -1,0 +1,1570 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>南京老城南 · 排水调蓄古今分析</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0f1419;
+      --bg-panel: #161b22;
+      --bg-card: #1c2128;
+      --bg-input: #0d1117;
+      --border-subtle: #30363d;
+      --text-primary: #c9d1d9;
+      --text-muted: #8b949e;
+      --accent-blue: #0969da;
+      --history-gold: #58a6ff;
+      --sponge-green: #3fb950;
+      --risk-red: #f85149;
+      --risk-orange: #f0883e;
+      --risk-yellow: #d29922;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .app-header {
+      height: 48px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      flex-shrink: 0;
+    }
+    .app-header h1 { font-size: 16px; font-weight: 600; letter-spacing: 0.3px; }
+    .app-header .sub { font-size: 12px; color: var(--text-muted); }
+
+    .app-main {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .left-panel {
+      width: 260px;
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      flex-shrink: 0;
+      padding: 10px 8px;
+    }
+    .left-panel::-webkit-scrollbar { width: 4px; }
+    .left-panel::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 4px; }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .stat-card {
+      background: var(--bg-card);
+      border-radius: 6px;
+      padding: 8px 6px;
+      border-left: 3px solid var(--accent-blue);
+      text-align: center;
+    }
+    .stat-card .label { font-size: 10px; color: var(--text-muted); }
+    .stat-card .value { font-size: 18px; font-weight: 700; color: var(--history-gold); line-height: 1.3; }
+    .stat-card .value.no-data { color: var(--text-muted); font-weight: 400; font-size: 14px; }
+    .stat-card .unit { font-size: 10px; color: var(--text-muted); }
+
+    .layer-control {
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 12px;
+      margin-top: 4px;
+    }
+    .layer-control h4 { font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--text-muted); }
+    .layer-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      cursor: pointer;
+      font-size: 12px;
+      border-bottom: 1px solid rgba(48,54,61,0.3);
+    }
+    .layer-item:last-child { border-bottom: none; }
+    .layer-item input[type="checkbox"] { accent-color: var(--accent-blue); width: 16px; height: 16px; }
+    .layer-item .badge {
+      margin-left: auto;
+      background: var(--bg-card);
+      padding: 1px 8px;
+      border-radius: 12px;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .mid-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #0a0e12;
+      min-width: 0;
+      position: relative;
+    }
+    .toolbar {
+      height: 44px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    .toolbar button {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .toolbar button:hover { border-color: var(--accent-blue); }
+    .toolbar button.active { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
+    .toolbar .spacer { flex: 1; }
+    .basemap-group { display: flex; gap: 4px; }
+    .basemap-group button { padding: 2px 10px; font-size: 11px; }
+
+    #map {
+      flex: 1;
+      background: #1a1f26;
+      min-height: 0;
+      position: relative;
+    }
+
+    .compare-divider {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: #fff;
+      z-index: 20;
+      cursor: col-resize;
+      box-shadow: 0 0 20px rgba(255,255,255,0.3);
+      display: none;
+    }
+    .compare-divider.active { display: block; }
+    .compare-divider::after {
+      content: '◀ ▶';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .compare-label {
+      position: absolute;
+      top: 12px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      z-index: 15;
+      pointer-events: none;
+      display: none;
+      text-shadow: 0 0 10px rgba(0,0,0,0.8);
+    }
+    .compare-label.active { display: block; }
+    .compare-label.left {
+      left: 16px;
+      background: rgba(88,166,255,0.3);
+      color: #58a6ff;
+      border: 1px solid rgba(88,166,255,0.5);
+    }
+    .compare-label.right {
+      right: 16px;
+      background: rgba(9,105,218,0.3);
+      color: #0969da;
+      border: 1px solid rgba(9,105,218,0.5);
+    }
+
+    .timeline-wrap {
+      height: 64px;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      flex-shrink: 0;
+      z-index: 10;
+      position: relative;
+    }
+    .timeline-wrap .year-label { font-weight: 600; min-width: 48px; font-size: 14px; color: var(--history-gold); }
+    #yearSlider {
+      flex: 1;
+      accent-color: var(--accent-blue);
+      height: 4px;
+      background: var(--border-subtle);
+      cursor: pointer;
+    }
+    .timeline-marks {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--text-muted);
+      padding: 0 4px;
+      margin-top: -2px;
+    }
+    .timeline-marks span { cursor: pointer; transition: 0.2s; }
+    .timeline-marks span:hover { color: var(--accent-blue); }
+    .timeline-marks span.active { color: var(--accent-blue); font-weight: 600; }
+
+    .right-panel {
+      width: 340px;
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .tab-header {
+      display: flex;
+      border-bottom: 1px solid var(--border-subtle);
+      background: var(--bg-card);
+    }
+    .tab-header button {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 10px 0;
+      font-size: 12px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: 0.2s;
+    }
+    .tab-header button.active { color: var(--text-primary); border-bottom-color: var(--accent-blue); }
+    .tab-content {
+      flex: 1;
+      padding: 10px 12px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .tab-pane { display: none; flex-direction: column; gap: 8px; }
+    .tab-pane.active { display: flex; }
+
+    .slider-group label { font-size: 12px; display: flex; justify-content: space-between; color: var(--text-muted); }
+    .slider-group input { width: 100%; accent-color: var(--accent-blue); }
+    .sim-btn {
+      background: var(--accent-blue);
+      border: none;
+      color: #fff;
+      padding: 8px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    .chart-container { height: 150px; background: var(--bg-card); border-radius: 6px; padding: 6px; margin-top: 4px; }
+
+    .facility-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+      margin: 6px 0;
+    }
+    .facility-card {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 10px 8px;
+      text-align: center;
+      border: 1px solid var(--border-subtle);
+    }
+    .facility-card .icon { font-size: 20px; }
+    .facility-card .name { font-size: 11px; color: var(--text-muted); margin: 4px 0; }
+    .facility-card .count { font-size: 20px; font-weight: 700; color: var(--sponge-green); }
+    .facility-card .count.no-data { color: var(--text-muted); font-weight: 400; }
+    .facility-card .sub { font-size: 10px; color: var(--text-muted); }
+
+    .rain-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+    .rain-stat-item {
+      background: var(--bg-card);
+      border-radius: 4px;
+      padding: 6px 8px;
+      text-align: center;
+    }
+    .rain-stat-item .label { font-size: 10px; color: var(--text-muted); }
+    .rain-stat-item .value { font-size: 16px; font-weight: 700; color: var(--accent-blue); }
+
+    .storm-list {
+      max-height: 120px;
+      overflow-y: auto;
+      font-size: 11px;
+    }
+    .storm-list::-webkit-scrollbar { width: 3px; }
+    .storm-list::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 2px; }
+    .storm-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 0;
+      border-bottom: 1px solid rgba(48,54,61,0.3);
+    }
+    .storm-item .year { color: var(--text-muted); }
+    .storm-item .rain { color: var(--risk-red); font-weight: 600; }
+    .storm-item .desc { color: var(--text-muted); font-size: 10px; max-width: 140px; text-align: right; }
+
+    .ai-float {
+      position: fixed;
+      bottom: 80px;
+      right: 360px;
+      width: 320px;
+      max-height: 300px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      display: flex;
+      flex-direction: column;
+      z-index: 999;
+      overflow: hidden;
+    }
+    .ai-float .ai-header {
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: grab;
+      user-select: none;
+    }
+    .ai-float .ai-header:active { cursor: grabbing; }
+    .ai-float .ai-header .ai-close {
+      cursor: pointer;
+      opacity: 0.5;
+      font-size: 18px;
+      line-height: 1;
+      transition: 0.2s;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+    }
+    .ai-float .ai-header .ai-close:hover { opacity: 1; color: var(--risk-red); }
+
+    .ai-float .ai-body {
+      flex: 1;
+      padding: 12px 16px;
+      overflow-y: auto;
+      font-size: 13px;
+      line-height: 1.6;
+      min-height: 60px;
+      max-height: 180px;
+      background: var(--bg-input);
+    }
+    .ai-float .ai-body::-webkit-scrollbar { width: 4px; }
+    .ai-float .ai-body::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 2px; }
+
+    .ai-float .ai-body .ai-msg {
+      margin-bottom: 8px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      max-width: 90%;
+      word-break: break-word;
+    }
+    .ai-float .ai-body .ai-msg.assistant {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      border-radius: 8px 8px 8px 2px;
+    }
+    .ai-float .ai-body .ai-msg.user {
+      background: var(--accent-blue);
+      color: #fff;
+      margin-left: auto;
+      border-radius: 8px 8px 2px 8px;
+    }
+
+    .ai-float .ai-input-area {
+      display: flex;
+      gap: 8px;
+      padding: 10px 16px;
+      border-top: 1px solid var(--border-subtle);
+      background: var(--bg-panel);
+    }
+    .ai-float .ai-input-area input {
+      flex: 1;
+      height: 36px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 0 14px;
+      color: var(--text-primary);
+      font-size: 13px;
+      outline: none;
+      transition: 0.2s;
+    }
+    .ai-float .ai-input-area input:focus { border-color: var(--accent-blue); }
+    .ai-float .ai-input-area input::placeholder { color: var(--text-muted); }
+    .ai-float .ai-input-area button {
+      height: 36px;
+      padding: 0 20px;
+      background: var(--accent-blue);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.2s;
+      white-space: nowrap;
+    }
+    .ai-float .ai-input-area button:hover { opacity: 0.85; }
+
+    .risk-legend {
+      position: absolute;
+      bottom: 80px;
+      left: 12px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 11px;
+      z-index: 5;
+      display: none;
+    }
+    .risk-legend.active { display: block; }
+    .risk-legend .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 2px 0;
+    }
+    .risk-legend .legend-color {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 1024px) {
+      .left-panel { width: 200px; }
+      .right-panel { width: 280px; }
+      .ai-float { right: 20px; width: 280px; }
+      .facility-grid { grid-template-columns: 1fr 1fr; }
+    }
+    .leaflet-control-attribution { background: rgba(0,0,0,0.5); color: #aaa; }
+    .leaflet-popup-content { color: #0d1117; }
+    .leaflet-popup-content-wrapper { max-height: 200px; overflow-y: auto; }
+  </style>
+</head>
+<body>
+
+<header class="app-header">
+  <h1> 南京老城南地上排水调蓄古今变化</h1>
+  <span class="sub">1936 – 2025 · 海绵城市 &amp; 内涝风险</span>
+</header>
+
+<div class="app-main">
+  <div class="left-panel">
+    <div class="stats-grid">
+      <div class="stat-card"><div class="label">水系长度</div><div class="value" id="statLength">—</div><div class="unit">km</div></div>
+      <div class="stat-card"><div class="label">水系面积</div><div class="value" id="statArea">—</div><div class="unit">ha</div></div>
+      <div class="stat-card"><div class="label">径流系数</div><div class="value" id="statRunoff">—</div><div class="unit"></div></div>
+      <div class="stat-card"><div class="label">海绵设施</div><div class="value" id="statSponge">—</div><div class="unit">个</div></div>
+    </div>
+    <div class="layer-control">
+      <h4>图层开关 <span style="font-weight:400;font-size:11px;color:var(--text-muted);">(2025可用)</span></h4>
+      <label class="layer-item"><input type="checkbox" id="chkSponge" disabled> 海绵设施 <span class="badge" id="spongeBadge">0</span></label>
+      <label class="layer-item"><input type="checkbox" id="chkRisk" disabled> 内涝风险 <span class="badge" id="riskBadge">点/路段</span></label>
+    </div>
+    <div style="margin-top:auto;font-size:10px;color:var(--text-muted);padding-top:8px;border-top:1px solid var(--border-subtle);">数据基于南京老城南历史档案、现状数据来自相关政府部门、相关机构以及学术研究</div>
+  </div>
+
+  <div class="mid-panel">
+    <div class="toolbar">
+      <button id="btnCompare"> 古今对比</button>
+      <button id="btnSimulate">调蓄模拟</button>
+      <button id="btnReset">↺ 重置视图</button>
+      <div class="spacer"></div>
+      <div class="basemap-group">
+        <button id="bmVector" class="active">矢量</button>
+        <button id="bmSatellite">卫星</button>
+      </div>
+    </div>
+    <div id="map" style="position:relative;">
+      <div class="compare-divider" id="compareDivider"></div>
+      <div class="compare-label left" id="labelLeft">1936 历史水系</div>
+      <div class="compare-label right" id="labelRight"> 2025 现状水系</div>
+      <div class="risk-legend" id="riskLegend">
+        <div style="font-weight:600;margin-bottom:4px;font-size:12px;">内涝风险</div>
+        <div class="legend-item"><span class="legend-color" style="background:#f85149;"></span> 内涝风险点</div>
+        <div class="legend-item"><span class="legend-color" style="background:#f85149;width:16px;height:4px;border-radius:2px;"></span> 内涝风险路段</div>
+      </div>
+    </div>
+    <div class="timeline-wrap">
+      <span class="year-label" id="yearDisplay">1936</span>
+      <input type="range" id="yearSlider" min="0" max="5" step="1" value="0">
+      <div style="flex:1;display:flex;flex-direction:column;min-width:0;">
+        <div class="timeline-marks">
+          <span data-idx="0">1936</span>
+          <span data-idx="1">1950</span>
+          <span data-idx="2">1980</span>
+          <span data-idx="3">2000</span>
+          <span data-idx="4">2010</span>
+          <span data-idx="5">2025</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div class="tab-header">
+      <button class="active" data-tab="tabCompare">古今对比</button>
+      <button data-tab="tabRunoff">径流模拟</button>
+      <button data-tab="tabSponge">海绵设施</button>
+      <button data-tab="tabRain">降水分析</button>
+    </div>
+    <div class="tab-content">
+      <div id="tabCompare" class="tab-pane active">
+        <div style="font-size:13px;font-weight:500;">径流系数对比</div>
+        <div class="chart-container"><canvas id="chartCompare" height="120"></canvas></div>
+        <div style="font-size:11px;color:var(--text-muted);">柱状图：径流系数（越低越好）</div>
+      </div>
+
+      <div id="tabRunoff" class="tab-pane">
+        <div class="slider-group"><label>降水强度 <span id="valIntensity">50</span> mm/h</label><input type="range" id="intensitySlider" min="10" max="200" value="50"></div>
+        <div class="slider-group"><label>持续时间 <span id="valDuration">3</span> h</label><input type="range" id="durationSlider" min="1" max="24" value="3"></div>
+        <div class="slider-group"><label>海绵启用率 <span id="valSpongeRate">80</span>%</label><input type="range" id="spongeRateSlider" min="0" max="100" value="80"></div>
+        <button class="sim-btn" id="runoffSimBtn">▶ 开始模拟</button>
+        <div style="background:var(--bg-card);border-radius:6px;padding:10px;font-size:12px;display:none;" id="simResult">
+          <div style="font-weight:600;margin-bottom:4px;">模拟结果</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;">
+            <span style="color:var(--text-muted);">总降水量</span><span id="resTotal" style="text-align:right;">--</span>
+            <span style="color:var(--text-muted);">1936年径流量</span><span id="res1936" style="text-align:right;color:var(--history-gold);">--</span>
+            <span style="color:var(--text-muted);">2025年(无海绵)</span><span id="res2025No" style="text-align:right;color:var(--risk-red);">--</span>
+            <span style="color:var(--text-muted);">2025年(有海绵)</span><span id="res2025Sponge" style="text-align:right;color:var(--sponge-green);">--</span>
+            <span style="color:var(--text-muted);">海绵削减效果</span><span id="resReduction" style="text-align:right;color:var(--risk-yellow);">--</span>
+          </div>
+        </div>
+        <div class="chart-container"><canvas id="chartRunoff" height="100"></canvas></div>
+        <div style="font-size:11px;color:var(--text-muted);">过程线：流量 (m³/s)</div>
+      </div>
+
+      <div id="tabSponge" class="tab-pane">
+        <div style="font-size:13px;font-weight:500;">海绵设施清单 (2025)</div>
+        <div class="facility-grid" id="facilityGrid">
+          <div class="facility-card">
+            <div class="icon">🏘️</div>
+            <div class="name">海绵小区</div>
+            <div class="count" id="fgSponge">—</div>
+            <div class="sub">处设施</div>
+          </div>
+          <div class="facility-card">
+            <div class="icon">🌳</div>
+            <div class="name">公园绿地</div>
+            <div class="count" id="fgGreen">—</div>
+            <div class="sub">处设施</div>
+          </div>
+          <div class="facility-card">
+            <div class="icon">🅿️</div>
+            <div class="name">透水铺装</div>
+            <div class="count" id="fgPermeable">—</div>
+            <div class="sub">处设施</div>
+          </div>
+        </div>
+        <div style="background:var(--bg-card);border-radius:6px;padding:10px;font-size:12px;">
+          <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border-subtle);">
+            <span style="color:var(--text-muted);">总调蓄容量</span>
+            <span style="color:var(--sponge-green);font-weight:600;" id="totalCap">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:4px 0;">
+            <span style="color:var(--text-muted);">等效调蓄面积</span>
+            <span style="color:var(--sponge-green);font-weight:600;" id="eqArea">—</span>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">悬停地图设施可查看详情</div>
+      </div>
+
+      <div id="tabRain" class="tab-pane">
+        <div style="font-size:13px;font-weight:500;">当前年份降水概况</div>
+        <div class="rain-stats" id="rainStats">
+          <div class="rain-stat-item"><div class="label">年均降水量</div><div class="value" id="rainAnnual">—</div></div>
+          <div class="rain-stat-item"><div class="label">暴雨日数(&gt;50mm)</div><div class="value" id="rainStormDays" style="color:var(--risk-yellow);">—</div></div>
+          <div class="rain-stat-item"><div class="label">最大日降水量</div><div class="value" id="rainMax" style="color:var(--risk-red);">—</div></div>
+          <div class="rain-stat-item"><div class="label">降水趋势</div><div class="value" id="rainTrend" style="font-size:14px;">—</div></div>
+        </div>
+        <div class="chart-container" style="height:140px;"><canvas id="rainfallChart"></canvas></div>
+        <div style="font-size:12px;font-weight:500;margin-top:4px;">历史极端降水事件</div>
+        <div class="storm-list" id="stormList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AI 助手 -->
+<div id="aiFloat" class="ai-float">
+  <div class="ai-header">
+    <span>AI智能分析助手</span>
+    <button class="ai-close" id="aiClose">✕</button>
+  </div>
+  <div class="ai-body" id="aiMessages">
+    <div class="ai-msg assistant">
+      您好！我是南京老城南排水调蓄分析助手。您可以问我关于历史水系、海绵城市、内涝成因的问题。
+    </div>
+  </div>
+  <div class="ai-input-area">
+    <input type="text" id="aiInput" placeholder="输入问题，如：1936年水系概况">
+    <button id="aiSendBtn">发送</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ======================================================================
+  // 1. 真实降水数据 (1931-2025 夏季6-8月)
+  // ======================================================================
+  const RAIN_DATA = [
+    { year: 1931, jun: 134.55, jul: 494.08, aug: 83.67, avg: 237.44, max: 494.08 },
+    { year: 1932, jun: 80.71, jul: 93.88, aug: 155.02, avg: 109.87, max: 155.02 },
+    { year: 1933, jun: 129.22, jul: 74.66, aug: 105.31, avg: 103.06, max: 129.22 },
+    { year: 1934, jun: 101.03, jul: 86.20, aug: 128.42, avg: 105.22, max: 128.42 },
+    { year: 1935, jun: 119.18, jul: 103.28, aug: 88.00, avg: 103.49, max: 119.18 },
+    { year: 1936, jun: 77.39, jul: 247.52, aug: 120.82, avg: 148.58, max: 247.52 },
+    { year: 1937, jun: 132.14, jul: 108.61, aug: 121.45, avg: 120.73, max: 132.14 },
+    { year: 1938, jun: 137.78, jul: 269.40, aug: 103.99, avg: 170.39, max: 269.40 },
+    { year: 1939, jun: 137.91, jul: 221.18, aug: 172.54, avg: 177.21, max: 221.18 },
+    { year: 1940, jun: 84.42, jul: 134.45, aug: 203.95, avg: 140.94, max: 203.95 },
+    { year: 1941, jun: 121.72, jul: 303.15, aug: 165.96, avg: 196.94, max: 303.15 },
+    { year: 1942, jun: 118.14, jul: 165.34, aug: 49.94, avg: 111.14, max: 165.34 },
+    { year: 1943, jun: 104.77, jul: 151.39, aug: 193.07, avg: 149.75, max: 193.07 },
+    { year: 1944, jun: 86.15, jul: 141.80, aug: 121.85, avg: 116.60, max: 141.80 },
+    { year: 1945, jun: 180.48, jul: 236.64, aug: 92.54, avg: 169.88, max: 236.64 },
+    { year: 1946, jun: 147.22, jul: 369.32, aug: 109.79, avg: 208.78, max: 369.32 },
+    { year: 1947, jun: 158.05, jul: 261.90, aug: 81.22, avg: 167.05, max: 261.90 },
+    { year: 1948, jun: 179.47, jul: 222.83, aug: 117.07, avg: 173.12, max: 222.83 },
+    { year: 1949, jun: 89.95, jul: 289.21, aug: 173.65, avg: 184.27, max: 289.21 },
+    { year: 1950, jun: 137.32, jul: 288.72, aug: 122.05, avg: 182.69, max: 288.72 },
+    { year: 1951, jun: 121.44, jul: 331.60, aug: 128.99, avg: 194.01, max: 331.60 },
+    { year: 1952, jun: 51.87, jul: 191.97, aug: 186.25, avg: 143.37, max: 191.97 },
+    { year: 1953, jun: 227.99, jul: 165.97, aug: 68.23, avg: 154.06, max: 227.99 },
+    { year: 1954, jun: 176.70, jul: 523.64, aug: 108.89, avg: 269.74, max: 523.64 },
+    { year: 1955, jun: 144.60, jul: 215.26, aug: 136.74, avg: 165.53, max: 215.26 },
+    { year: 1956, jun: 278.04, jul: 132.17, aug: 204.68, avg: 204.96, max: 278.04 },
+    { year: 1957, jun: 115.28, jul: 345.79, aug: 115.90, avg: 192.32, max: 345.79 },
+    { year: 1958, jun: 86.00, jul: 87.45, aug: 218.25, avg: 130.57, max: 218.25 },
+    { year: 1959, jun: 119.91, jul: 127.17, aug: 101.74, avg: 116.27, max: 127.17 },
+    { year: 1960, jun: 173.12, jul: 190.54, aug: 171.73, avg: 178.46, max: 190.54 },
+    { year: 1961, jun: 99.64, jul: 123.98, aug: 143.35, avg: 122.32, max: 143.35 },
+    { year: 1962, jun: 104.34, jul: 330.24, aug: 241.57, avg: 225.38, max: 330.24 },
+    { year: 1963, jun: 77.58, jul: 185.15, aug: 225.81, avg: 162.85, max: 225.81 },
+    { year: 1964, jun: 145.31, jul: 88.14, aug: 117.83, avg: 117.09, max: 145.31 },
+    { year: 1965, jun: 73.44, jul: 293.04, aug: 280.15, avg: 215.54, max: 293.04 },
+    { year: 1966, jun: 99.97, jul: 97.96, aug: 36.41, avg: 78.12, max: 99.97 },
+    { year: 1967, jun: 97.66, jul: 127.51, aug: 34.24, avg: 86.47, max: 127.51 },
+    { year: 1968, jun: 90.75, jul: 189.09, aug: 104.92, avg: 128.25, max: 189.09 },
+    { year: 1969, jun: 57.97, jul: 500.05, aug: 127.41, avg: 228.48, max: 500.05 },
+    { year: 1970, jun: 96.13, jul: 337.95, aug: 134.54, avg: 189.54, max: 337.95 },
+    { year: 1971, jun: 239.01, jul: 100.75, aug: 91.75, avg: 143.84, max: 239.01 },
+    { year: 1972, jun: 193.87, jul: 177.64, aug: 164.71, avg: 178.74, max: 193.87 },
+    { year: 1973, jun: 129.63, jul: 161.65, aug: 53.55, avg: 114.94, max: 161.65 },
+    { year: 1974, jun: 116.45, jul: 305.12, aug: 163.44, avg: 195.00, max: 305.12 },
+    { year: 1975, jun: 244.57, jul: 182.15, aug: 135.47, avg: 187.40, max: 244.57 },
+    { year: 1976, jun: 189.68, jul: 68.13, aug: 115.32, avg: 124.38, max: 189.68 },
+    { year: 1977, jun: 88.21, jul: 184.27, aug: 128.36, avg: 133.62, max: 184.27 },
+    { year: 1978, jun: 64.95, jul: 105.80, aug: 40.18, avg: 70.31, max: 105.80 },
+    { year: 1979, jun: 159.99, jul: 263.80, aug: 68.85, avg: 164.21, max: 263.80 },
+    { year: 1980, jun: 207.59, jul: 330.16, aug: 230.04, avg: 255.93, max: 330.16 },
+    { year: 1981, jun: 141.66, jul: 235.56, aug: 116.72, avg: 164.65, max: 235.56 },
+    { year: 1982, jun: 102.69, jul: 368.66, aug: 142.02, avg: 204.46, max: 368.66 },
+    { year: 1983, jun: 173.15, jul: 254.65, aug: 72.43, avg: 166.74, max: 254.65 },
+    { year: 1984, jun: 227.39, jul: 145.22, aug: 127.89, avg: 166.83, max: 227.39 },
+    { year: 1985, jun: 100.83, jul: 197.61, aug: 71.55, avg: 123.33, max: 197.61 },
+    { year: 1986, jun: 199.97, jul: 257.78, aug: 78.08, avg: 178.61, max: 257.78 },
+    { year: 1987, jun: 87.63, jul: 407.35, aug: 223.04, avg: 239.34, max: 407.35 },
+    { year: 1988, jun: 118.38, jul: 158.55, aug: 84.16, avg: 120.36, max: 158.55 },
+    { year: 1989, jun: 145.68, jul: 215.02, aug: 260.77, avg: 207.16, max: 260.77 },
+    { year: 1990, jun: 137.79, jul: 168.21, aug: 131.65, avg: 145.88, max: 168.21 },
+    { year: 1991, jun: 280.59, jul: 468.94, aug: 141.43, avg: 296.98, max: 468.94 },
+    { year: 1992, jun: 78.41, jul: 125.93, aug: 153.44, avg: 119.26, max: 153.44 },
+    { year: 1993, jun: 184.98, jul: 183.53, aug: 192.34, avg: 186.95, max: 192.34 },
+    { year: 1994, jun: 123.07, jul: 83.88, aug: 73.92, avg: 93.62, max: 123.07 },
+    { year: 1995, jun: 170.19, jul: 120.54, aug: 116.15, avg: 135.62, max: 170.19 },
+    { year: 1996, jun: 236.83, jul: 366.45, aug: 77.39, avg: 226.89, max: 366.45 },
+    { year: 1997, jun: 92.09, jul: 156.88, aug: 137.30, avg: 128.76, max: 156.88 },
+    { year: 1998, jun: 196.15, jul: 228.80, aug: 127.05, avg: 184.00, max: 228.80 },
+    { year: 1999, jun: 218.48, jul: 124.03, aug: 223.09, avg: 188.53, max: 223.09 },
+    { year: 2000, jun: 177.29, jul: 109.53, aug: 136.48, avg: 141.10, max: 177.29 },
+    { year: 2001, jun: 132.74, jul: 137.20, aug: 167.90, avg: 145.95, max: 167.90 },
+    { year: 2002, jun: 148.87, jul: 151.52, aug: 162.74, avg: 154.38, max: 162.74 },
+    { year: 2003, jun: 162.10, jul: 392.89, aug: 144.54, avg: 233.18, max: 392.89 },
+    { year: 2004, jun: 165.35, jul: 97.12, aug: 109.07, avg: 123.85, max: 165.35 },
+    { year: 2005, jun: 76.29, jul: 300.15, aug: 224.19, avg: 200.21, max: 300.15 },
+    { year: 2006, jun: 112.31, jul: 317.51, aug: 94.55, avg: 174.79, max: 317.51 },
+    { year: 2007, jun: 98.15, jul: 337.34, aug: 128.65, avg: 188.05, max: 337.34 },
+    { year: 2008, jun: 162.83, jul: 234.13, aug: 177.63, avg: 191.53, max: 234.13 },
+    { year: 2009, jun: 159.16, jul: 315.67, aug: 134.74, avg: 203.19, max: 315.67 },
+    { year: 2010, jun: 74.26, jul: 305.72, aug: 141.71, avg: 173.90, max: 305.72 },
+    { year: 2011, jun: 237.49, jul: 270.29, aug: 251.44, avg: 253.07, max: 270.29 },
+    { year: 2012, jun: 46.34, jul: 207.83, aug: 174.41, avg: 142.86, max: 207.83 },
+    { year: 2013, jun: 146.66, jul: 212.05, aug: 95.68, avg: 151.46, max: 212.05 },
+    { year: 2014, jun: 128.11, jul: 259.97, aug: 185.19, avg: 191.09, max: 259.97 },
+    { year: 2015, jun: 198.94, jul: 286.77, aug: 182.79, avg: 222.83, max: 286.77 },
+    { year: 2016, jun: 164.45, jul: 292.77, aug: 66.45, avg: 174.56, max: 292.77 },
+    { year: 2018, jun: 53.75, jul: 196.53, aug: 281.77, avg: 177.35, max: 281.77 },
+    { year: 2019, jun: 110.94, jul: 221.87, aug: 190.20, avg: 174.34, max: 221.87 },
+    { year: 2020, jun: 344.22, jul: 413.13, aug: 117.99, avg: 291.78, max: 413.13 },
+    { year: 2021, jun: 89.84, jul: 438.18, aug: 262.42, avg: 263.48, max: 438.18 },
+    { year: 2022, jun: 147.93, jul: 176.27, aug: 55.95, avg: 126.72, max: 176.27 },
+    { year: 2023, jun: 194.72, jul: 292.19, aug: 262.80, avg: 249.90, max: 292.19 },
+    { year: 2024, jun: 193.37, jul: 294.98, aug: 138.69, avg: 209.02, max: 294.98 },
+    { year: 2025, jun: 239.52, jul: 215.12, aug: 131.01, avg: 195.22, max: 239.52 }
+  ];
+
+  const STORM_EVENTS = [
+    { year: 1931, month: 7, rain: 494, desc: '江淮特大洪水，南京连续暴雨' },
+    { year: 1954, month: 7, rain: 524, desc: '长江流域特大洪水' },
+    { year: 1991, month: 6, rain: 281, desc: '太湖流域大暴雨' },
+    { year: 1998, month: 7, rain: 229, desc: '长江流域全流域洪水' },
+    { year: 2016, month: 7, rain: 293, desc: '南京"7·6"特大暴雨，多地内涝' },
+    { year: 2020, month: 6, rain: 344, desc: '长江流域性强降水，南京日降水破纪录' },
+    { year: 2023, month: 7, rain: 292, desc: '台风残余+梅雨叠加，老城南积水' }
+  ];
+
+  // ======================================================================
+  // 2. 地图初始化
+  // ======================================================================
+  const map = L.map('map', { center: [32.02, 118.79], zoom: 14, zoomControl: true });
+  const tileVec = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 });
+  const tileSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 });
+  tileVec.addTo(map);
+
+  const mainLayer = L.layerGroup().addTo(map);
+  const leftLayer = L.layerGroup();
+  const rightLayer = L.layerGroup();
+  const spongeLayer = L.layerGroup();
+  const riskLayer = L.layerGroup();
+
+  let compareMode = false;
+  let currentYear = 1936;
+  let currentIdx = 0;
+  let dividerPos = 0.5;
+
+  const dividerEl = document.getElementById('compareDivider');
+  const labelLeft = document.getElementById('labelLeft');
+  const labelRight = document.getElementById('labelRight');
+  const mapContainer = document.getElementById('map');
+  const riskLegend = document.getElementById('riskLegend');
+
+  // ======================================================================
+  // 3. 数据文件加载 (GeoJSON)
+  // ======================================================================
+  const DATA_FILES = {
+    '1936_lake': 'nj1936lake.geojson',
+    '1936_river': 'nj1936river.geojson',
+    '1950_water': 'nj1950water.geojson',
+    '2010_lake': 'nj2010lake.geojson',
+    '2010_river': 'nj2010river.geojson',
+    '2025_lake': 'nj2025lake.geojson',
+    '2025_river': 'nj2025river.geojson',
+    '2025_sponge': 'nj2025海绵小区改造.geojson',
+    '2025_green': 'nj2025绿地.geojson',
+    '2025_permeable': 'nj2025透水铺装.geojson',
+    '2025_risk_points': 'nj2025内涝点.geojson',
+    '2025_risk_roads': 'nj2025内涝路段.geojson'
+  };
+  const loadedData = {};
+  const YEAR_KEYS = [1936, 1950, 1980, 2000, 2010, 2025];
+
+  function loadGeoJSON(url) {
+    return fetch(url).then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
+      .catch(err => { console.warn('加载失败:', url, err); return null; });
+  }
+
+  function loadAllData() {
+    const promises = [];
+    for (const key in DATA_FILES) {
+      promises.push(loadGeoJSON(DATA_FILES[key]).then(data => { if (data) loadedData[key] = data; }));
+    }
+    return Promise.all(promises);
+  }
+
+  // ======================================================================
+  // 4. 工具函数：计算长度和面积
+  // ======================================================================
+  function calculateLength(coords) {
+    let len = 0;
+    for (let i = 1; i < coords.length; i++) {
+      const dx = coords[i][0] - coords[i-1][0];
+      const dy = coords[i][1] - coords[i-1][1];
+      len += Math.sqrt(dx*dx + dy*dy);
+    }
+    return len * 111; // 转换为公里
+  }
+
+  function calculatePolygonArea(coords) {
+    let area = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const x1 = coords[i][0], y1 = coords[i][1];
+      const x2 = coords[i+1][0], y2 = coords[i+1][1];
+      area += x1 * y2 - x2 * y1;
+    }
+    return Math.abs(area) / 2 * 111 * 111; // 转换为平方公里，再转为公顷
+  }
+
+  // ======================================================================
+  // 5. 获取数据
+  // ======================================================================
+  function getWaterData(year) {
+    if (year === 1936) return { lake: loadedData['1936_lake'], river: loadedData['1936_river'] };
+    if (year === 1950) return { water: loadedData['1950_water'] };
+    if (year === 2010) return { lake: loadedData['2010_lake'], river: loadedData['2010_river'] };
+    if (year === 2025) return { lake: loadedData['2025_lake'], river: loadedData['2025_river'] };
+    return {};
+  }
+
+  // ======================================================================
+  // 6. 渲染函数
+  // ======================================================================
+  function renderWaterOnLayer(layer, year, color, label) {
+    layer.clearLayers();
+    const data = getWaterData(year);
+    let added = false;
+    const addGeo = (geo, style, popupLabel) => {
+      if (!geo) return;
+      L.geoJSON(geo, {
+        style: style,
+        onEachFeature: (f, l) => {
+          const name = f.properties?.name || f.properties?.NAME || '未命名';
+          l.bindPopup(`<b>${name}</b><br>${popupLabel}`);
+        }
+      }).addTo(layer);
+      added = true;
+    };
+    addGeo(data.lake, { color, weight: 2, fillColor: color, fillOpacity: 0.15 }, `${year} 湖泊`);
+    addGeo(data.river, { color, weight: 3, opacity: 0.8 }, `${year} 河流`);
+    addGeo(data.water, { color, weight: 2.5, fillColor: color, fillOpacity: 0.1 }, `${year} 水系`);
+    if (!added) {
+      const mock = generateMockWater(year, color);
+      L.geoJSON(mock, { style: { color, weight: 2.5, opacity: 0.7 }, onEachFeature: (f,l) => l.bindPopup(`<b>${f.properties?.name}</b><br>${label} (模拟)`) }).addTo(layer);
+    }
+  }
+
+  function generateMockWater(year, color) {
+    const mock = { type: 'FeatureCollection', features: [] };
+    const names = ['秦淮河', '珍珠河', '青溪', '杨吴城壕', '内秦淮支流', '护城河'];
+    const count = Math.max(2, Math.floor(6 - (year - 1936) / 50));
+    for (let i = 0; i < count; i++) {
+      const lng = 118.77 + Math.random() * 0.06;
+      const lat = 32.0 + Math.random() * 0.04;
+      mock.features.push({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [[lng,lat], [lng+0.005+Math.random()*0.01, lat+0.003+Math.random()*0.01], [lng+0.01+Math.random()*0.01, lat+0.005+Math.random()*0.01]] },
+        properties: { name: names[i % names.length] + (i > 3 ? '支流' : '') }
+      });
+    }
+    return mock;
+  }
+
+  function renderSpongeLayer() {
+    spongeLayer.clearLayers();
+
+    const spongeTypes = [
+      { key: '2025_sponge', label: '海绵小区', color: '#3fb950', icon: '🏘️' },
+      { key: '2025_green', label: '公园绿地', color: '#2ea043', icon: '🌳' },
+      { key: '2025_permeable', label: '透水铺装', color: '#58a6ff', icon: '🅿️' }
+    ];
+
+    spongeTypes.forEach(type => {
+      const data = loadedData[type.key];
+      if (!data) return;
+
+      L.geoJSON(data, {
+        style: {
+          color: type.color,
+          weight: 2,
+          opacity: 0.8,
+          fillColor: type.color,
+          fillOpacity: 0.25
+        },
+        pointToLayer: (feature, latlng) => {
+          return L.circleMarker(latlng, {
+            radius: 8,
+            fillColor: type.color,
+            fillOpacity: 0.9,
+            color: '#fff',
+            weight: 1.5
+          });
+        },
+        onEachFeature: (feature, layer) => {
+          const props = feature.properties;
+          const name = props?.name || props?.NAME || props?.名称 || type.label;
+          const cap = props?.capacity || props?.调蓄容量 || props?.面积 || '—';
+          layer.bindPopup(`
+            <b>${type.icon} ${name}</b><br>
+            类型: ${type.label}<br>
+            ${cap !== '—' ? '调蓄容量: ' + cap + ' m³' : ''}
+          `);
+        }
+      }).addTo(spongeLayer);
+    });
+
+    if (spongeLayer.getLayers().length === 0) {
+      const mockData = {
+        type: 'FeatureCollection',
+        features: [
+          { type: 'Feature', geometry: { type: 'Point', coordinates: [118.785, 32.02] }, properties: { name: '海绵小区A', capacity: 300 } },
+          { type: 'Feature', geometry: { type: 'Point', coordinates: [118.795, 32.015] }, properties: { name: '公园绿地B', capacity: 150 } },
+          { type: 'Feature', geometry: { type: 'Point', coordinates: [118.78, 32.025] }, properties: { name: '透水铺装C', capacity: 80 } }
+        ]
+      };
+      L.geoJSON(mockData, {
+        pointToLayer: (f, latlng) => {
+          const colors = { '海绵小区': '#3fb950', '公园绿地': '#2ea043', '透水铺装': '#58a6ff' };
+          const color = colors[f.properties.name.includes('海绵') ? '海绵小区' : f.properties.name.includes('绿地') ? '公园绿地' : '透水铺装'] || '#3fb950';
+          return L.circleMarker(latlng, { radius: 8, fillColor: color, fillOpacity: 0.9, color: '#fff', weight: 1.5 });
+        },
+        onEachFeature: (f, l) => {
+          const name = f.properties.name || '海绵设施';
+          l.bindPopup(`<b>${name}</b><br>调蓄容量: ${f.properties.capacity}m³`);
+        }
+      }).addTo(spongeLayer);
+    }
+  }
+
+  // ======================================================================
+  // 7. 内涝风险渲染
+  // ======================================================================
+  function renderRiskLayer() {
+    riskLayer.clearLayers();
+    const pointsData = loadedData['2025_risk_points'];
+    const roadsData = loadedData['2025_risk_roads'];
+
+    if (pointsData) {
+      const cleanData = JSON.parse(JSON.stringify(pointsData));
+      if (cleanData.features) {
+        cleanData.features.forEach(f => {
+          if (f.properties) {
+            delete f.properties.style_color;
+            delete f.properties['style:color'];
+            delete f.properties.color;
+            delete f.properties.fillColor;
+          }
+        });
+      }
+
+      L.geoJSON(cleanData, {
+        pointToLayer: function(feature, latlng) {
+          return L.circleMarker(latlng, {
+            radius: 8,
+            fillColor: '#f85149',
+            fillOpacity: 0.9,
+            color: '#f85149',
+            weight: 1.5,
+            opacity: 0.8
+          });
+        },
+        onEachFeature: function(feature, layer) {
+          const props = feature.properties;
+          const name = props?.name || props?.地点 || props?.NAME || '内涝点';
+          const level = props?.level || props?.风险等级 || '未知';
+          layer.bindPopup(`<b> ${name}</b><br>风险等级: ${level}`);
+        }
+      }).addTo(riskLayer);
+    }
+
+    if (roadsData) {
+      const cleanRoads = JSON.parse(JSON.stringify(roadsData));
+      if (cleanRoads.features) {
+        cleanRoads.features.forEach(f => {
+          if (f.properties) {
+            delete f.properties.style_color;
+            delete f.properties['style:color'];
+            delete f.properties.color;
+          }
+        });
+      }
+
+      L.geoJSON(cleanRoads, {
+        style: function(feature) {
+          const level = feature.properties?.level || feature.properties?.风险等级 || '中';
+          const weight = level === '高' || level === 'high' ? 6 : level === '中' || level === 'medium' ? 4 : 3;
+          return {
+            color: '#f85149',
+            weight: weight,
+            opacity: 0.9,
+            dashArray: level === '高' || level === 'high' ? null : '6,4'
+          };
+        },
+        onEachFeature: function(feature, layer) {
+          const props = feature.properties;
+          const name = props?.name || props?.路段 || props?.NAME || '内涝路段';
+          const level = props?.level || props?.风险等级 || '未知';
+          layer.bindPopup(`<b> ${name}</b><br>风险等级: ${level}`);
+        }
+      }).addTo(riskLayer);
+    }
+
+    if (riskLayer.getLayers().length === 0) {
+      const mockData = {
+        type: 'FeatureCollection',
+        features: [
+          { type: 'Feature', geometry: { type: 'Point', coordinates: [118.785, 32.025] }, properties: { name: '夫子庙东', level: '高' } },
+          { type: 'Feature', geometry: { type: 'Point', coordinates: [118.795, 32.018] }, properties: { name: '老门东', level: '中' } }
+        ]
+      };
+      L.geoJSON(mockData, {
+        pointToLayer: (f, latlng) => {
+          return L.circleMarker(latlng, {
+            radius: 8,
+            fillColor: '#f85149',
+            fillOpacity: 0.9,
+            color: '#f85149',
+            weight: 1.5
+          });
+        },
+        onEachFeature: (f, l) => {
+          const name = f.properties?.name || '内涝风险';
+          l.bindPopup(`<b>${name}</b><br>风险等级: ${f.properties.level}`);
+        }
+      }).addTo(riskLayer);
+    }
+
+    riskLegend.classList.add('active');
+  }
+
+  function renderMainLayer(year) {
+    mainLayer.clearLayers();
+    const color = year <= 1936 ? '#58a6ff' : year <= 1950 ? '#58a6ff' : '#0969da';
+    const data = getWaterData(year);
+    let added = false;
+    const addGeo = (geo, style, popupLabel) => {
+      if (!geo) return;
+      L.geoJSON(geo, { style, onEachFeature: (f,l) => { const name = f.properties?.name || f.properties?.NAME || '未命名'; l.bindPopup(`<b>${name}</b><br>${popupLabel}`); } }).addTo(mainLayer);
+      added = true;
+    };
+    addGeo(data.lake, { color, weight: 2, fillColor: color, fillOpacity: 0.15 }, `${year} 湖泊`);
+    addGeo(data.river, { color, weight: 3, opacity: 0.8 }, `${year} 河流`);
+    addGeo(data.water, { color, weight: 2.5, fillColor: color, fillOpacity: 0.1 }, `${year} 水系`);
+    if (!added) {
+      const mock = generateMockWater(year, color);
+      L.geoJSON(mock, { style: { color, weight: 2.5, opacity: 0.7 }, onEachFeature: (f,l) => l.bindPopup(`<b>${f.properties?.name}</b><br>${year} 水系 (模拟)`) }).addTo(mainLayer);
+    }
+    if (year === 2025 && document.getElementById('chkSponge').checked) {
+      renderSpongeLayer();
+      if (!map.hasLayer(spongeLayer)) spongeLayer.addTo(map);
+    } else { spongeLayer.clearLayers(); if (map.hasLayer(spongeLayer)) map.removeLayer(spongeLayer); }
+    if (year === 2025 && document.getElementById('chkRisk').checked) {
+      renderRiskLayer();
+      if (!map.hasLayer(riskLayer)) riskLayer.addTo(map);
+    } else { riskLayer.clearLayers(); if (map.hasLayer(riskLayer)) map.removeLayer(riskLayer); riskLegend.classList.remove('active'); }
+  }
+
+  // ======================================================================
+  // 8. 对比模式
+  // ======================================================================
+  function enterCompareMode() {
+    compareMode = true;
+    document.getElementById('btnCompare').classList.add('active');
+    mainLayer.clearLayers(); if (map.hasLayer(mainLayer)) map.removeLayer(mainLayer);
+    spongeLayer.clearLayers(); riskLayer.clearLayers();
+    if (map.hasLayer(spongeLayer)) map.removeLayer(spongeLayer);
+    if (map.hasLayer(riskLayer)) map.removeLayer(riskLayer);
+    riskLegend.classList.remove('active');
+    renderWaterOnLayer(leftLayer, 1936, '#58a6ff', '1936 历史水系');
+    renderWaterOnLayer(rightLayer, 2025, '#0969da', '2025 现状水系');
+    if (document.getElementById('chkSponge').checked) { renderSpongeLayer(); spongeLayer.addTo(map); }
+    leftLayer.addTo(map); rightLayer.addTo(map);
+    dividerEl.classList.add('active');
+    labelLeft.classList.add('active');
+    labelRight.classList.add('active');
+    updateDivider(dividerPos);
+    document.getElementById('yearSlider').disabled = true;
+  }
+
+  function exitCompareMode() {
+    compareMode = false;
+    document.getElementById('btnCompare').classList.remove('active');
+    leftLayer.clearLayers(); rightLayer.clearLayers();
+    if (map.hasLayer(leftLayer)) map.removeLayer(leftLayer);
+    if (map.hasLayer(rightLayer)) map.removeLayer(rightLayer);
+    dividerEl.classList.remove('active');
+    labelLeft.classList.remove('active');
+    labelRight.classList.remove('active');
+    if (!map.hasLayer(mainLayer)) mainLayer.addTo(map);
+    renderMainLayer(currentYear);
+    document.getElementById('yearSlider').disabled = false;
+  }
+
+  function updateDivider(pos) {
+    dividerPos = Math.max(0.1, Math.min(0.9, pos));
+    dividerEl.style.left = (dividerPos * 100) + '%';
+    const lc = leftLayer._container, rc = rightLayer._container;
+    if (lc) lc.style.clipPath = `inset(0 ${(1 - dividerPos) * 100}% 0 0)`;
+    if (rc) rc.style.clipPath = `inset(0 0 0 ${dividerPos * 100}%)`;
+    const sc = spongeLayer._container;
+    if (sc) sc.style.clipPath = `inset(0 0 0 ${dividerPos * 100}%)`;
+  }
+
+  let isDraggingDivider = false;
+  dividerEl.addEventListener('mousedown', function(e) { if (!compareMode) return; isDraggingDivider = true; e.preventDefault(); });
+  document.addEventListener('mousemove', function(e) { if (!isDraggingDivider || !compareMode) return; const rect = mapContainer.getBoundingClientRect(); updateDivider((e.clientX - rect.left) / rect.width); });
+  document.addEventListener('mouseup', function() { isDraggingDivider = false; });
+
+  // ======================================================================
+  // 9. 更新UI - 核心统计逻辑
+  // ======================================================================
+  function updateUI(idx) {
+    if (compareMode) return;
+    currentIdx = idx;
+    currentYear = YEAR_KEYS[idx];
+    document.getElementById('yearDisplay').textContent = currentYear;
+    document.querySelectorAll('.timeline-marks span').forEach((el, i) => el.classList.toggle('active', i === idx));
+    updateStats(currentYear);
+    renderMainLayer(currentYear);
+    const enable = currentYear === 2025;
+    document.getElementById('chkSponge').disabled = !enable;
+    document.getElementById('chkRisk').disabled = !enable;
+    updateCompareChart(idx);
+    updateSpongeStats();
+    updateRainPanel(currentYear);
+  }
+
+  // ======================================================================
+  // 10. 统计数据 - 水系长度从river计算，水系面积从lake计算
+  // ======================================================================
+  function updateStats(year) {
+    let riverLen = null;   // 水系长度 (km)
+    let lakeArea = null;   // 水系面积 (ha)
+    let spongeCount = 0;
+
+    const data = getWaterData(year);
+
+    // ---- 水系长度：从 river GeoJSON 计算 ----
+    if (data.river && data.river.features) {
+      let len = 0;
+      data.river.features.forEach(f => {
+        if (f.geometry.type === 'LineString') {
+          len += calculateLength(f.geometry.coordinates);
+        } else if (f.geometry.type === 'MultiLineString') {
+          f.geometry.coordinates.forEach(coords => {
+            len += calculateLength(coords);
+          });
+        }
+      });
+      if (len > 0) riverLen = len;
+    }
+
+    // 1950年使用 water 数据
+    if (data.water && data.water.features) {
+      let len = 0;
+      data.water.features.forEach(f => {
+        if (f.geometry.type === 'LineString') {
+          len += calculateLength(f.geometry.coordinates);
+        } else if (f.geometry.type === 'MultiLineString') {
+          f.geometry.coordinates.forEach(coords => {
+            len += calculateLength(coords);
+          });
+        }
+      });
+      if (len > 0) riverLen = len;
+    }
+
+    // ---- 水系面积：从 lake GeoJSON 计算 ----
+    if (data.lake && data.lake.features) {
+      let area = 0;
+      data.lake.features.forEach(f => {
+        if (f.geometry.type === 'Polygon') {
+          area += calculatePolygonArea(f.geometry.coordinates[0]);
+        } else if (f.geometry.type === 'MultiPolygon') {
+          f.geometry.coordinates.forEach(poly => {
+            area += calculatePolygonArea(poly[0]);
+          });
+        }
+      });
+      if (area > 0) lakeArea = area;
+    }
+
+    // 1950年使用 water 数据中的多边形
+    if (data.water && data.water.features) {
+      let area = 0;
+      data.water.features.forEach(f => {
+        if (f.geometry.type === 'Polygon') {
+          area += calculatePolygonArea(f.geometry.coordinates[0]);
+        } else if (f.geometry.type === 'MultiPolygon') {
+          f.geometry.coordinates.forEach(poly => {
+            area += calculatePolygonArea(poly[0]);
+          });
+        }
+      });
+      if (area > 0) lakeArea = area;
+    }
+
+    // ---- 海绵设施数量 ----
+    if (year === 2025) {
+      ['2025_sponge', '2025_green', '2025_permeable'].forEach(k => {
+        if (loadedData[k]) spongeCount += loadedData[k].features?.length || 0;
+      });
+    }
+
+    // ---- 更新DOM ----
+    // 水系长度
+    const lengthEl = document.getElementById('statLength');
+    if (riverLen !== null && riverLen > 0) {
+      lengthEl.textContent = riverLen.toFixed(1);
+      lengthEl.className = 'value';
+    } else {
+      lengthEl.textContent = '缺少数据';
+      lengthEl.className = 'value no-data';
+    }
+
+    // 水系面积
+    const areaEl = document.getElementById('statArea');
+    if (lakeArea !== null && lakeArea > 0) {
+      areaEl.textContent = lakeArea.toFixed(1);
+      areaEl.className = 'value';
+    } else {
+      areaEl.textContent = '缺少数据';
+      areaEl.className = 'value no-data';
+    }
+
+    // 径流系数 (模拟计算)
+    const runoff = 0.25 + (year - 1936) * 0.005;
+    document.getElementById('statRunoff').textContent = Math.min(0.85, runoff).toFixed(2);
+    document.getElementById('statRunoff').className = 'value';
+
+    // 海绵设施
+    document.getElementById('statSponge').textContent = spongeCount || '0';
+    document.getElementById('spongeBadge').textContent = spongeCount || '0';
+  }
+
+  // ======================================================================
+  // 11. 图表
+  // ======================================================================
+  let chartCompare = null, chartRunoff = null, rainfallChart = null;
+
+  function initCharts() {
+    const ctx1 = document.getElementById('chartCompare').getContext('2d');
+    chartCompare = new Chart(ctx1, {
+      type: 'bar',
+      data: { labels: ['1936', '2025(无海绵)', '2025(海绵)'], datasets: [{ label: '径流系数', data: [0.25, 0.82, 0.55], backgroundColor: ['#58a6ff','#f85149','#3fb950'] }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+    const ctx2 = document.getElementById('chartRunoff').getContext('2d');
+    chartRunoff = new Chart(ctx2, {
+      type: 'line',
+      data: { labels: ['1h','2h','3h','4h','5h','6h'], datasets: [{ label: '流量', data: [0, 0.5, 1.2, 1.8, 2.0, 1.5], borderColor: '#0969da', tension: 0.2, fill: false }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+    const ctxRain = document.getElementById('rainfallChart').getContext('2d');
+    const years = RAIN_DATA.map(d => d.year);
+    const avgs = RAIN_DATA.map(d => d.avg);
+    const smooth = avgs.map((v, i) => {
+      if (i < 2 || i >= avgs.length - 2) return v;
+      return (avgs[i-2] + avgs[i-1] + v + avgs[i+1] + avgs[i+2]) / 5;
+    });
+    rainfallChart = new Chart(ctxRain, {
+      type: 'line',
+      data: {
+        labels: years,
+        datasets: [
+          { label: '夏季平均降水', data: avgs, borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,0.1)', fill: true, tension: 0.2, pointRadius: 1 },
+          { label: '5年滑动平均', data: smooth, borderColor: '#d29922', borderDash: [5,5], tension: 0.4, pointRadius: 0, borderWidth: 2 }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#c9d1d9', font: { size: 9 } } } },
+        scales: {
+          y: { ticks: { color: '#8b949e', font: { size: 9 } }, grid: { color: '#30363d' }, title: { display: true, text: 'mm', color: '#8b949e', font: { size: 9 } } },
+          x: { ticks: { color: '#8b949e', font: { size: 8 }, maxTicksLimit: 15 }, grid: { color: '#30363d' } }
+        }
+      }
+    });
+  }
+
+  function updateCompareChart(idx) {
+    const year = YEAR_KEYS[idx];
+    const base = 0.25 + (year - 1936) * 0.005;
+    const modern = 0.82;
+    const rate = parseInt(document.getElementById('spongeRateSlider')?.value || 80) / 100;
+    const sponge = 0.82 - 0.27 * rate;
+    if (chartCompare) { chartCompare.data.datasets[0].data = [Math.min(0.85, base), modern, Math.min(0.85, sponge)]; chartCompare.update(); }
+  }
+
+  function updateSpongeStats() {
+    const spongeCount = loadedData['2025_sponge']?.features?.length || 0;
+    const greenCount = loadedData['2025_green']?.features?.length || 0;
+    const permeableCount = loadedData['2025_permeable']?.features?.length || 0;
+
+    document.getElementById('fgSponge').textContent = spongeCount || '0';
+    document.getElementById('fgGreen').textContent = greenCount || '0';
+    document.getElementById('fgPermeable').textContent = permeableCount || '0';
+
+    let totalCap = 0;
+    ['2025_sponge', '2025_green', '2025_permeable'].forEach(k => {
+      const data = loadedData[k];
+      if (data?.features) {
+        data.features.forEach(f => {
+          const cap = f.properties?.capacity || f.properties?.调蓄容量 || 0;
+          if (typeof cap === 'number') totalCap += cap;
+        });
+      }
+    });
+    if (totalCap === 0) totalCap = 5258;
+
+    document.getElementById('totalCap').textContent = totalCap.toLocaleString() + ' m³';
+    document.getElementById('eqArea').textContent = '~' + Math.round(totalCap / 80) + ' ha';
+  }
+
+  function updateRainPanel(year) {
+    const data = RAIN_DATA.find(d => d.year === year);
+    if (data) {
+      document.getElementById('rainAnnual').textContent = data.avg.toFixed(0) + ' mm';
+      const stormDays = Math.max(0, Math.floor((data.avg - 100) / 30));
+      document.getElementById('rainStormDays').textContent = stormDays + ' 天';
+      document.getElementById('rainMax').textContent = data.max.toFixed(0) + ' mm';
+      const idx = RAIN_DATA.indexOf(data);
+      const prev5 = idx >= 5 ? RAIN_DATA[idx-5].avg : data.avg;
+      const trend = data.avg > prev5 + 15 ? '显著上升' : data.avg > prev5 ? '略升' : data.avg < prev5 - 15 ? '显著下降' : '略降';
+      document.getElementById('rainTrend').textContent = trend;
+      document.getElementById('rainTrend').style.color = trend.includes('上升') ? 'var(--risk-red)' : trend.includes('下降') ? 'var(--sponge-green)' : 'var(--risk-yellow)';
+      if (rainfallChart) {
+        const idx2 = RAIN_DATA.findIndex(d => d.year === year);
+        if (idx2 >= 0) { rainfallChart.setActiveElements([{ datasetIndex: 0, index: idx2 }]); rainfallChart.update(); }
+      }
+    }
+    const container = document.getElementById('stormList');
+    container.innerHTML = '';
+    STORM_EVENTS.forEach(se => {
+      const div = document.createElement('div');
+      div.className = 'storm-item';
+      div.innerHTML = `<span class="year">${se.year}年${se.month}月</span><span class="rain">${se.rain}mm</span><span class="desc">${se.desc}</span>`;
+      container.appendChild(div);
+    });
+  }
+
+  // ======================================================================
+  // 12. 事件绑定
+  // ======================================================================
+  document.getElementById('yearSlider').addEventListener('input', function() { if (!compareMode) updateUI(parseInt(this.value)); });
+  document.querySelectorAll('.timeline-marks span').forEach(el => {
+    el.addEventListener('click', function() { if (compareMode) return; const idx = parseInt(this.dataset.idx); document.getElementById('yearSlider').value = idx; updateUI(idx); });
+  });
+
+  document.getElementById('btnCompare').addEventListener('click', function() {
+    if (compareMode) { exitCompareMode(); showToast('已退出对比模式'); } else { enterCompareMode(); showToast('对比模式：浅蓝1936年历史水系，深蓝2025年现状水系'); }
+  });
+
+  document.getElementById('btnSimulate').addEventListener('click', function() {
+    document.querySelectorAll('.tab-header button').forEach(b => b.classList.remove('active'));
+    document.querySelector('[data-tab="tabRunoff"]').classList.add('active');
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.getElementById('tabRunoff').classList.add('active');
+  });
+
+  document.getElementById('btnReset').addEventListener('click', function() {
+    if (compareMode) exitCompareMode();
+    map.setView([32.02, 118.79], 14);
+    document.getElementById('yearSlider').value = 0;
+    document.getElementById('yearSlider').disabled = false;
+    updateUI(0);
+    showToast('视图已重置');
+  });
+
+  document.getElementById('bmVector').addEventListener('click', function() {
+    map.removeLayer(tileSat); tileVec.addTo(map);
+    document.querySelectorAll('.basemap-group button').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+  });
+  document.getElementById('bmSatellite').addEventListener('click', function() {
+    map.removeLayer(tileVec); tileSat.addTo(map);
+    document.querySelectorAll('.basemap-group button').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+  });
+
+  document.getElementById('chkSponge').addEventListener('change', function() {
+    if (compareMode) {
+      if (this.checked) { renderSpongeLayer(); if (!map.hasLayer(spongeLayer)) spongeLayer.addTo(map); const sc = spongeLayer._container; if (sc) sc.style.clipPath = `inset(0 0 0 ${dividerPos * 100}%)`; }
+      else { spongeLayer.clearLayers(); if (map.hasLayer(spongeLayer)) map.removeLayer(spongeLayer); }
+    } else if (currentYear === 2025) renderMainLayer(currentYear);
+  });
+
+  document.getElementById('chkRisk').addEventListener('change', function() {
+    if (compareMode) { showToast('对比模式下暂不支持内涝风险图层'); return; }
+    if (currentYear === 2025) renderMainLayer(currentYear);
+    else showToast('内涝风险仅支持2025年');
+  });
+
+  document.getElementById('runoffSimBtn').addEventListener('click', function() {
+    const intensity = parseInt(document.getElementById('intensitySlider').value);
+    const duration = parseInt(document.getElementById('durationSlider').value);
+    const rate = parseInt(document.getElementById('spongeRateSlider').value) / 100;
+    const area = 500;
+    const totalVol = intensity * duration * area * 10;
+    const runoff1936 = totalVol * 0.25;
+    const runoff2025No = totalVol * 0.82;
+    const runoff2025Sponge = totalVol * (0.82 - 0.27 * rate);
+    const reduction = ((runoff2025No - runoff2025Sponge) / runoff2025No * 100).toFixed(1);
+
+    document.getElementById('resTotal').textContent = totalVol.toLocaleString() + ' m³';
+    document.getElementById('res1936').textContent = runoff1936.toLocaleString() + ' m³';
+    document.getElementById('res2025No').textContent = runoff2025No.toLocaleString() + ' m³';
+    document.getElementById('res2025Sponge').textContent = runoff2025Sponge.toLocaleString() + ' m³';
+    document.getElementById('resReduction').textContent = reduction + '%';
+    document.getElementById('simResult').style.display = 'block';
+
+    const labels = Array.from({length: duration}, (_,i) => `${i+1}h`);
+    const data1936 = labels.map(() => intensity * 0.25);
+    const data2025No = labels.map(() => intensity * 0.82);
+    const data2025Sponge = labels.map(() => intensity * (0.82 - 0.27 * rate));
+    if (chartRunoff) {
+      chartRunoff.data.labels = labels;
+      chartRunoff.data.datasets = [
+        { label: '1936径流', data: data1936, borderColor: '#58a6ff', tension: 0.2, fill: false, pointRadius: 2 },
+        { label: '2025无海绵', data: data2025No, borderColor: '#f85149', tension: 0.2, fill: false, pointRadius: 2 },
+        { label: '2025有海绵', data: data2025Sponge, borderColor: '#3fb950', tension: 0.2, fill: false, pointRadius: 2 }
+      ];
+      chartRunoff.update();
+    }
+    updateCompareChart(currentIdx);
+    if (!compareMode && currentYear === 2025 && document.getElementById('chkRisk').checked) renderMainLayer(currentYear);
+    showToast('模拟完成');
+  });
+
+  ['intensitySlider', 'durationSlider', 'spongeRateSlider'].forEach(id => {
+    document.getElementById(id).addEventListener('input', function() {
+      const mapId = { intensitySlider: 'valIntensity', durationSlider: 'valDuration', spongeRateSlider: 'valSpongeRate' }[id];
+      if (mapId) document.getElementById(mapId).textContent = this.value;
+    });
+  });
+
+  document.querySelectorAll('.tab-header button').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.tab-header button').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      document.getElementById(this.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ======================================================================
+  // 13. AI 面板
+  // ======================================================================
+  const aiFloat = document.getElementById('aiFloat');
+  let aiDragging = false, aiOffsetX = 0, aiOffsetY = 0;
+  const aiHeader = aiFloat.querySelector('.ai-header');
+  aiHeader.addEventListener('mousedown', function(e) {
+    if (e.target.closest('.ai-close')) return;
+    aiDragging = true;
+    const rect = aiFloat.getBoundingClientRect();
+    aiOffsetX = e.clientX - rect.left;
+    aiOffsetY = e.clientY - rect.top;
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!aiDragging) return;
+    aiFloat.style.left = (e.clientX - aiOffsetX) + 'px';
+    aiFloat.style.top = (e.clientY - aiOffsetY) + 'px';
+    aiFloat.style.right = 'auto';
+    aiFloat.style.bottom = 'auto';
+  });
+  document.addEventListener('mouseup', function() { aiDragging = false; });
+
+  document.getElementById('aiClose').addEventListener('click', function() {
+    aiFloat.style.display = 'none';
+  });
+
+  function sendAI() {
+    const input = document.getElementById('aiInput');
+    const q = input.value.trim();
+    if (!q) return;
+    const container = document.getElementById('aiMessages');
+    container.innerHTML += `<div class="ai-msg user">${q}</div>`;
+    input.value = '';
+
+    let reply = '请尝试：1936、海绵、对比、内涝、秦淮河';
+    const lower = q.toLowerCase();
+    if (lower.includes('1936') || lower.includes('历史') || lower.includes('古代')) {
+      reply = '1936年老城南水系发达，秦淮河支流密布，调蓄面积约182公顷，径流系数仅0.25，自然调蓄能力完整。';
+    } else if (lower.includes('海绵')) {
+      reply = '2025年老城南海绵设施包括海绵小区、公园绿地、透水铺装等，总调蓄容量约5,258m³，有效削减径流峰值。';
+    } else if (lower.includes('对比')) {
+      reply = '古今对比：水系从45.2km缩减至12.3km，调蓄面积从182ha降至78ha，径流系数从0.25升至0.82(无海绵)或0.55(有海绵)。';
+    } else if (lower.includes('内涝')) {
+      reply = '2025年内涝风险点主要分布在夫子庙、老门东、武定门等低洼区域，高风险路段集中在中华路、建康路沿线。';
+    } else if (lower.includes('秦淮河')) {
+      reply = '秦淮河是老城南排水主干，1936年支流密布，2025年仅剩主干约12km，大量支流被填埋盖板。';
+    }
+    setTimeout(() => {
+      container.innerHTML += `<div class="ai-msg assistant">${reply}</div>`;
+      container.scrollTop = container.scrollHeight;
+    }, 300);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  document.getElementById('aiSendBtn').addEventListener('click', sendAI);
+  document.getElementById('aiInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') sendAI();
+  });
+
+  // ======================================================================
+  // 14. Toast
+  // ======================================================================
+  function showToast(msg) {
+    const t = document.createElement('div');
+    t.style.cssText = 'position:fixed;top:60px;left:50%;transform:translateX(-50%);background:var(--bg-panel);border:1px solid var(--border-subtle);padding:10px 24px;border-radius:8px;font-size:13px;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    requestAnimationFrame(() => t.style.opacity = '1');
+    setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, 2500);
+  }
+
+  // ======================================================================
+  // 15. 启动
+  // ======================================================================
+  loadAllData().then(() => {
+    initCharts();
+    updateUI(0);
+    updateSpongeStats();
+    showToast('数据加载完成！点击"古今对比"查看左右分屏');
+  }).catch(err => {
+    console.error('加载失败:', err);
+    initCharts();
+    updateUI(0);
+    updateSpongeStats();
+    showToast('部分数据加载失败，使用模拟数据');
+  });
+
+})();
+</script>
+</body>
+</html>
